@@ -472,6 +472,58 @@ class ActorHelper:
     def count_actors():
         actors = ActorHelper.load_actors()
         return len(actors)
+    
+    @staticmethod
+    def validate_parser():
+        url = 'https://javdb.com/actors/Av2e?page=8'
+        actor_ret = {
+            "id": "Av2e",
+            "url": "https://javdb.com/actors/Av2e",
+            "summary": {
+                "name": "三上悠亞",
+                "latname": "MikamiYua",
+                "chnname": "三上悠亜",
+                "othnames": [
+                "鬼头桃菜"
+                ],
+                "movies": 287,
+                "avatar": "https://c0.jdbstatic.com/avatars/av/Av2e.jpg"
+            },
+            "movies": {
+                "Aq1pO": {
+                    "id": "Aq1pO",
+                    "url": "/v/Aq1pO",
+                    "cover": "https://c0.jdbstatic.com/covers/aq/Aq1pO.jpg",
+                    "vol": "TEK-067",
+                    "title": "Princess Peach 三上悠亜 （ブルーレイディスク）",
+                    "date": "2015-06-01"
+                }
+            }
+        }
+
+        def is_actor_info_match(origin, res, key):
+            if not res.get(key, None) or res[key] != origin[key]:
+                print(f'[X] {key} dis-match')
+                raise BaseException()
+            return True
+
+        actor = ActorHelper.pull_actor_page(url, useOriginUrl=True)
+        if not actor:
+            print(f'[X] Failed to get actor page')
+            return False
+        movies_cnt = actor.get('summary', {}).get('movies', 0)
+        if movies_cnt < actor_ret['summary']['movies']:
+            print(f'[X] Movie count dis-match')
+            return False
+        actor['summary']['movies'] = actor_ret['summary']['movies']
+
+        try:
+            is_actor_info_match(actor_ret, actor, 'summary')
+            is_actor_info_match(actor_ret.get('movies', {}), actor.get('movies'), 'Aq1pO')
+        except BaseException as e:
+            return False
+        
+        return True
 
 class MovieParser:
 
@@ -731,6 +783,141 @@ class MovieHelper:
     def count_movies():
         movie_ids = MovieHelper.scan_movie_ids_indb()
         return len(movie_ids)
+    
+    @staticmethod
+    def validate_parser():
+        url = 'https://javdb.com/v/XW63QP'
+        movie_ret = {
+            "id": "XW63QP",
+            "url": "https://javdb.com/v/XW63QP",
+            "cover": "https://c0.jdbstatic.com/covers/xw/XW63QP.jpg",
+            "title": "水着モデルをさせられて…興奮が忘れられず集団視姦にハマってしまった変態OL 夢乃あいか 生写真3枚付き",
+            "tags": [
+                {
+                "url": "/tags?c5=14",
+                "name": "Titty Fuck"
+                },
+                {
+                "url": "/tags?c4=17",
+                "name": "Big Tits"
+                },
+                {
+                "url": "/tags?c1=23",
+                "name": "Nasty, Hardcore"
+                },
+                {
+                "url": "/tags?c7=28",
+                "name": "Solowork"
+                },
+                {
+                "url": "/tags?c6=79",
+                "name": "Humiliation"
+                },
+                {
+                "url": "/tags?c7=347",
+                "name": "4K"
+                },
+                {
+                "url": "/tags?c7=348",
+                "name": "Uncensored Crack"
+                }
+            ],
+            "actors": [
+                {
+                "url": "/actors/AbBK",
+                "name": "夢乃あいか"
+                },
+                {
+                "url": "/actors/E2Z3M",
+                "name": "マッスル澤野"
+                },
+                {
+                "url": "/actors/eK7Dp",
+                "name": "まーち"
+                },
+                {
+                "url": "/actors/neP6w",
+                "name": "冴山トシキ"
+                },
+                {
+                "url": "/actors/65x3M",
+                "name": "野島誠"
+                }
+            ],
+            "vol": {
+                "url": "/video_codes/SSIS",
+                "ser": "SSIS",
+                "vol": "SSIS-909"
+            },
+            "date": "2023-10-25",
+            "previews": {
+                "v": [
+                "https://cc3001.dmm.com/litevideo/freepv/s/ssi/ssis00909/ssis00909dm.mp4"
+                ],
+                "i": [
+                "https://c0.jdbstatic.com/covers/xw/XW63QP.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_0.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_1.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_2.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_3.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_4.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_5.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_6.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_7.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_8.jpg",
+                "https://c0.jdbstatic.com/samples/xw/XW63QP_s_9.jpg"
+                ]
+            },
+            "downloads": [
+                {
+                "mag": "magnet:?xt=urn:btih:5471f9803660893d042ba46c22c5377e8c1f3237&amp;dn=[javdb.com]SSIS-909-C.torrent",
+                "size": "7.24GB"
+                },
+                {
+                "mag": "magnet:?xt=urn:btih:b9ba61796083e758561626cd26daec2d72c9f4d4&amp;dn=[javdb.com]SSIS-909-UC.torrent.无码破解",
+                "size": "6.76GB"
+                },
+                {
+                "mag": "magnet:?xt=urn:btih:982ea570a5ff2abe086a452348b255a8dfc638d6&amp;dn=[javdb.com]ssis-909-4k.torrent",
+                "size": "23.81GB"
+                },
+                {
+                "mag": "magnet:?xt=urn:btih:f998530e293fb03b0e117bd8caed65774b08ff8e&amp;dn=[javdb.com]SSIS-909",
+                "size": "7.59GB"
+                },
+                {
+                "mag": "magnet:?xt=urn:btih:c1e7408156ccd48da68fe069edeed8270612104e&amp;dn=[javdb.com]ssis-909.torrent",
+                "size": "7.44GB"
+                },
+                {
+                "mag": "magnet:?xt=urn:btih:2140b062e2de05faa89601c297d30a8784e068c6&amp;dn=[javdb.com]SSIS-909.mp4",
+                "size": "2.11GB"
+                },
+                {
+                "mag": "magnet:?xt=urn:btih:343f68a526c67f6317f1fb32e51bc974c1d1d0cc&amp;dn=[javdb.com]SSIS-909",
+                "size": "2.32GB"
+                }
+            ]
+        }
+
+        def is_movie_info_match(origin, res, key):
+            if not res.get(key, None) or res[key] != origin[key]:
+                print(f'[X] {key} dis-match')
+                raise BaseException()
+            return True
+
+        movie_detail = MovieHelper.pull_movie_page(url)
+        if not movie_detail:
+            print(f'[X] Failed to get movie page')
+            return False
+
+        try:
+            for key in movie_ret.keys():#('tags', 'actors', 'vol', 'previews', 'downloads'):
+                is_movie_info_match(movie_ret, movie_detail, key)
+        except BaseException as e:
+            return False
+        
+        return True
 
 class SearchParser:
 
@@ -1222,6 +1409,18 @@ def import_movie_series():
     logging.info(f'Import DONE!')
     vols = MovieSeries.scan_vols_indb()
 
+def validate_parser():
+    if not MovieHelper.validate_parser():
+        logging.error(f'Movie parser validation failed!')
+        return False
+    
+    if not ActorHelper.validate_parser():
+        logging.error(f'Actor parser validation failed!')
+        return False
+
+    logging.info(f'Parser validation passed!')
+    return True
+
 def count():
     actor_cnt = ActorHelper.count_actors()
     movie_cnt = MovieHelper.count_movies()
@@ -1304,11 +1503,21 @@ if __name__ == '__main__':
                 vol = sys.argv[2].strip().upper()
                 print(f'[=] Loading vol: {vol}')
                 movie_summary = MovieSeries.load_or_search_vol(vol)
-                print(json.dumps(movie_summary, indent=2, ensure_ascii=False))
+                if movie_summary:
+                    print(json.dumps(movie_summary, indent=2, ensure_ascii=False))
+                    movie_detail = MovieHelper.load_movie(movie_summary['id'])
+                    if movie_detail:
+                        print(json.dumps(movie_detail, indent=2, ensure_ascii=False))
+                    else:
+                        print(f'[X] No movie_detail found for vol: {vol}')
+                else:
+                    print(f'[X] No movie_summary found for vol: {vol}')
             else:
                 print('[X] vol value needed!')
         elif arg.startswith('count'): # count actors, movies, vols
             count()
+        elif arg.startswith('parser'): # validate parser
+            validate_parser()
         elif arg.startswith('test'): # test
             test()
         elif arg.startswith('help'): # help
