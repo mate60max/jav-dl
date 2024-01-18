@@ -173,25 +173,25 @@ class UrlParser:
     def parse_actor_id(url):
         pats = re.findall(UrlParser._actor_id_pattern, url)
         parser_logger.debug(pats)
-        return pats[0]
+        return pats[0] if len(pats) > 0 else None
 
     @staticmethod
     def parse_movie_id(url):
         pats = re.findall(UrlParser._movie_id_pattern, url)
         parser_logger.debug(pats)
-        return pats[0]
+        return pats[0] if len(pats) > 0 else None
 
     @staticmethod
     def parse_url_root(url):
         pats = re.findall(UrlParser._url_root_pattern, url)
         parser_logger.debug(pats)
-        return pats[0]
+        return pats[0] if len(pats) > 0 else None
 
     @staticmethod
     def parse_url_path(url):
         pats = re.findall(UrlParser._url_path_pattern, url)
         parser_logger.debug(pats)
-        return pats[0]
+        return pats[0] if len(pats) > 0 else None
     
     @staticmethod
     def parse_url_file(url):
@@ -218,6 +218,14 @@ class UrlParser:
     @staticmethod
     def get_search_url(keyword, url_root=DEFAULT_URL_ROOT):
         return  UrlParser.get_full_url(url_root, f'search?q={keyword}')
+    
+    @staticmethod
+    def is_actor_url(url):
+        return UrlParser.parse_actor_id(url) != None
+
+    @staticmethod
+    def is_movie_url(url):
+        return UrlParser.parse_movie_id(url) != None
     
 class ActorParser:
 
@@ -459,6 +467,11 @@ class ActorHelper:
         print(f' - othernames: {actor["summary"]["othnames"]}')
         print(f' - movie_number: {actor["summary"]["movies"]}')
         print(f' - movies_listed: {len(actor["movies"])}')
+
+    @staticmethod
+    def count_actors():
+        actors = ActorHelper.load_actors()
+        return len(actors)
 
 class MovieParser:
 
@@ -713,6 +726,11 @@ class MovieHelper:
         movie['downloads'] = movie_download
 
         return movie
+    
+    @staticmethod
+    def count_movies():
+        movie_ids = MovieHelper.scan_movie_ids_indb()
+        return len(movie_ids)
 
 class SearchParser:
 
@@ -879,6 +897,11 @@ class MovieSeries:
             if save and movie_summary:
                 MovieSeries.save_movie_summary(movie_summary)
             return movie_summary
+        
+    @staticmethod
+    def count_vols():
+        movie_vols = MovieSeries.scan_vols_indb()
+        return len(movie_vols)
 
 # fetch & save actor's summary & movies
 # get_new_only=True, fetch new movies only
@@ -898,7 +921,6 @@ def update_actor_urls(urls=[], get_new_only=True):
         else:
             todo_urls.append(url)
     return todo_urls
-
 
 # call update_actor_urls() and save failed urls to file.
 # new_actor_only=True, only update on new actors, not already saved ones.
@@ -922,6 +944,65 @@ def add_actor_urls(urls=[], new_actor_only=True):
     else:
         logging.info(f'Successfully added {len(todo_urls)} actor urls')
     return failed_urls
+
+# pull movie page and save to db
+def update_movie_urls(urls=[], get_new_only=True):
+    logging.info(f'Updating {len(urls)} movie urls: get_new_only={get_new_only}')
+    total_urls = len(urls)
+    cnt = 0
+    todo_urls = []
+    for url in urls:
+        cnt = cnt + 1
+        movie_id = UrlParser.parse_movie_id(url)
+        logging.info(f'[{cnt}/{total_urls}] Processing Movie: {movie_id}')
+        movie_detail = MovieHelper.pull_movie_page(url)
+        if movie_detail:
+            logging.info(f'MovieDetail Got: {len(movie_detail["tags"])} tags, {len(movie_detail["previews"]["i"])} images, {len(movie_detail["previews"]["v"])} videos, {len(movie_detail["downloads"])} downloads')
+            MovieHelper.save_movie(movie_detail)
+        else:
+            todo_urls.append(url)
+    return todo_urls
+
+# pull movie page and save to db
+def add_movie_urls(urls=[], new_movie_only=True):
+    logging.info(f'Adding {len(urls)} movie urls: new_movie_only={new_movie_only}')
+    if not new_movie_only:
+        todo_urls = urls
+    else:
+        todo_urls = []
+        for url in urls:
+            movie_id = UrlParser.parse_movie_id(url)
+            movie = MovieHelper.load_movie(movie_id)
+            if not movie:
+                todo_urls.append(url)
+    logging.info(f'Got {len(todo_urls)} movie urls TODO:')
+    failed_urls = update_movie_urls(todo_urls, get_new_only=False)
+    if len(failed_urls) > 0:
+        failed_urls_file = f'failed_movie_urls_{int(time.time())}.txt'
+        write_plain_urls(failed_urls, failed_urls_file)
+        logging.warn(f'Add movie urls failed: {failed_urls}, saved to {failed_urls_file}')
+    else:
+        logging.info(f'Successfully added {len(todo_urls)} movie urls')
+    return failed_urls
+
+# add new actor or movie url to db
+def add_new_urls(urls=[]):
+    actor_urls = []
+    movie_urls = []
+    unknown_urls = []
+    for url in urls:
+        if UrlParser.is_movie_url(url):
+            movie_urls.append(url)
+        elif UrlParser.is_actor_url(url):
+            actor_urls.append(url)
+        else:
+            unknown_urls.append(url)
+
+    add_actor_urls(actor_urls)
+    add_movie_urls(movie_urls)
+    if len(unknown_urls) > 0:
+        print(f'[X] Unknown URLs: {len(unknown_urls)}')
+        print(unknown_urls)
 
 # fetch new movies of actors in db
 def update_actors_indb(db_dir=ActorHelper.DEFAULT_ACTOR_DB_DIR):
@@ -1141,6 +1222,14 @@ def import_movie_series():
     logging.info(f'Import DONE!')
     vols = MovieSeries.scan_vols_indb()
 
+def count():
+    actor_cnt = ActorHelper.count_actors()
+    movie_cnt = MovieHelper.count_movies()
+    vol_cnt = MovieSeries.count_vols()
+    logging.info(f'[=] Actor count: {actor_cnt}')
+    logging.info(f'[=] Movie count: {movie_cnt}')
+    logging.info(f'[=] Vol count: {vol_cnt}')
+
 def test():
     parser_logger.setLevel(logging.DEBUG)
     http_logger.setLevel(logging.DEBUG)
@@ -1156,6 +1245,11 @@ def test():
     # cnt = 0
     # while True:
     #     cnt += 1
+
+def print_usage():
+    print('[==] Usage: javdb [actors | movies | covers | previews | sync]')
+    print('[==] Urls: javdb [{actor_url} | {movie_url} | {*.txt}')
+    print('[==] Add: javdb [parser | import_movie_series | search | vol | count]')
 
 if __name__ == '__main__':
     # signal.signal(signal.SIGINT, signal_handler)
@@ -1187,10 +1281,10 @@ if __name__ == '__main__':
             sync_indb()
         elif arg.startswith("http"): # pull actor page, update & save
             print(f'[=] Start with input URL: {arg}')
-            add_actor_urls([arg])
+            add_new_urls([arg])
         elif arg.endswith('.txt'): # pull actors' pages, update & save
             print(f'[=] Start with input file: {arg}')
-            add_actor_urls(read_plain_urls(arg))
+            add_new_urls(read_plain_urls(arg))
         elif arg.startswith('import_movie_series'): # build index
             import_movie_series()
         elif arg.startswith('search'): # search movie
@@ -1213,11 +1307,16 @@ if __name__ == '__main__':
                 print(json.dumps(movie_summary, indent=2, ensure_ascii=False))
             else:
                 print('[X] vol value needed!')
+        elif arg.startswith('count'): # count actors, movies, vols
+            count()
         elif arg.startswith('test'): # test
             test()
+        elif arg.startswith('help'): # help
+            print_usage()
         else:
-            print(f'[X] Unsupported input arg, exit..')
+            print(f'[X] Unsupported input arg.')
+            print_usage()
     else:
-        print('[==] Usage: javdb [actors | movies | covers | previews | sync | {actor_url} | {*.txt} | index]')
+       print_usage()
 
     close_chrome()
