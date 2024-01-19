@@ -240,5 +240,8 @@ pyrightconfig.json
 
 
 runs/
-javdme-db/
+javdb/
+javdb-data/
 tmp/
+bak/
+*.txt
