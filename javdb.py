@@ -1309,7 +1309,7 @@ def download_covers(target_dir='javdb-data'):
         do_download_movie_cover(movie_summary, target_dir, progress_str=f'cover [{movie_cnt}/{movie_total}]')
 
 # download previews(video & images) of movie details
-def download_movie_previews(movie_db=MovieHelper.DEFAULT_MOVIE_DB_DIR, target_dir='javdb-data', threads=1):
+def download_movie_previews(movie_db=MovieHelper.DEFAULT_MOVIE_DB_DIR, target_dir='javdb-data', threads=1, down_image=True, down_video=False):
 
     if threads == 1:
         single_thread = True
@@ -1368,20 +1368,22 @@ def download_movie_previews(movie_db=MovieHelper.DEFAULT_MOVIE_DB_DIR, target_di
 
             url_root = UrlParser.parse_url_root(movie['url'])
 
-            for image_url in movie['previews']['i']:
-                url = UrlParser.get_full_url(url_root, image_url)
-                url = url.replace('_s_', '_l_')
-                filename = UrlParser.parse_url_file(url)
-                target_file = MovieHelper.get_movie_previews_file(target_dir, movie_id, filename, True)
-                if not os.path.exists(target_file):
-                    executor.submit(http_download, url, target_file, log_start=f'[{movie_cnt}/{movie_total}]Downloading preview image: {url} to {target_file}' if single_thread else None, remove_if_err=True, show_progress=False)
+            if down_image:
+                for image_url in movie['previews']['i']:
+                    url = UrlParser.get_full_url(url_root, image_url)
+                    url = url.replace('_s_', '_l_')
+                    filename = UrlParser.parse_url_file(url)
+                    target_file = MovieHelper.get_movie_previews_file(target_dir, movie_id, filename, True)
+                    if not os.path.exists(target_file):
+                        executor.submit(http_download, url, target_file, log_start=f'[{movie_cnt}/{movie_total}]Downloading preview image: {url} to {target_file}' if single_thread else None, remove_if_err=True, show_progress=False)
 
-            for video_url in movie['previews']['v']:
-                url = UrlParser.get_full_url(url_root, video_url)
-                filename = UrlParser.parse_url_file(url)
-                target_file = MovieHelper.get_movie_previews_file(target_dir, movie_id, filename, True)
-                if not os.path.exists(target_file):
-                    executor.submit(http_download, url, target_file, log_start=f'[{movie_cnt}/{movie_total}]Downloading preview video: {url} to {target_file}' if single_thread else None, remove_if_err=True, show_progress=single_thread)
+            if down_video:
+                for video_url in movie['previews']['v']:
+                    url = UrlParser.get_full_url(url_root, video_url)
+                    filename = UrlParser.parse_url_file(url)
+                    target_file = MovieHelper.get_movie_previews_file(target_dir, movie_id, filename, True)
+                    if not os.path.exists(target_file):
+                        executor.submit(http_download, url, target_file, log_start=f'[{movie_cnt}/{movie_total}]Downloading preview video: {url} to {target_file}' if single_thread else None, remove_if_err=True, show_progress=single_thread)
 
         executor.shutdown(wait=True)
         if default_executor == executor:
@@ -1467,8 +1469,20 @@ if __name__ == '__main__':
             data_dir = '/Volumes/Download-2T/javdb-data'
             if len(sys.argv) > 2:
                 data_dir = sys.argv[2].strip()
+            if arg.endswith('image'):
+                down_image = True
+                down_video = False
+            elif arg.endswith('video'):
+                down_image = False
+                down_video = True
+            elif arg.endswith('all'):
+                down_image = True
+                down_video = True
+            else:
+                down_image = True
+                down_video = False
             print(f'[=] Start downloading movie previews to {data_dir}')
-            download_movie_previews(target_dir=data_dir, threads=5)        
+            download_movie_previews(target_dir=data_dir, threads=5, down_image=down_image, down_video=down_video)        
         elif arg.startswith('actors'): # update actors in db, pull actor & movie info from actor page
             print(f'[=] Start updating actors')
             update_actors_indb()
