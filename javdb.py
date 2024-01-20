@@ -687,6 +687,11 @@ class MovieHelper:
         with open(file, 'r') as f:
             movie = json.load(f)
         return movie
+    
+    @staticmethod
+    def is_movie_exists(movie_id, movie_db=DEFAULT_MOVIE_DB_DIR):
+        file = MovieHelper.get_movie_file(movie_db, movie_id)
+        return os.path.exists(file)
 
     @staticmethod
     def scan_movie_ids_indb(movie_db=DEFAULT_MOVIE_DB_DIR):
@@ -1010,6 +1015,13 @@ class MovieSeries:
         with open(file, 'r') as f:
             movie_summary = json.load(f)
         return movie_summary
+    
+    @staticmethod
+    def is_vol_exists(vol, series_db=DEFAULT_SERIES_DB_DIR):
+        series = MovieSeries.parse_series_from_vol(vol)
+        dir = os.path.join(series_db, series)
+        file = os.path.join(dir, f'{vol}.json')
+        return os.path.exists(file)
 
     @staticmethod
     def import_movie_details(ignore_exists=True):
@@ -1090,6 +1102,110 @@ class MovieSeries:
         movie_vols = MovieSeries.scan_vols_indb()
         return len(movie_vols)
 
+class LocalVols:
+
+    _parse_pattern = re.compile(r'(\d{1,3})?([a-zA-Z]{2,7})-?(\d{3,5})(-?[a-zA-Z]+|-[\d]+)?')
+    _final_pattern = re.compile(r'^(\d{1,3})?([a-zA-Z]{2,7})-(\d{3,5})(-[a-zA-Z\d]{1})?(\[[^\]]*\])?$')
+    _valid_exts = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'iso', 'rmvb', 'ts', 'divx', 'jpg', 'jpeg', 'png']
+    _pic_exts = ['jpg', 'jpeg', 'png']
+
+    @staticmethod
+    def load_files(files_txt='adt_files.txt'):
+        with open(files_txt, 'r') as f:
+            lines = f.readlines()
+        lines = [line.strip() for line in lines]
+        return lines
+    
+    @staticmethod
+    def try_parse_media_name(pat):
+        # series = (pat[0] + pat[1]).upper()
+        series = (pat[1]).upper()
+        number = pat[2]
+        section = pat[3].replace('-', '').upper() # remove start '-'
+        if len(section) > 1:
+            section = ''
+        return series, number, section
+
+    @staticmethod
+    def make_media_name(series, number, section=None):
+        if not section:
+            return f'{series.upper()}-{number}'
+        else:
+            return f'{series.upper()}-{number}-{section.upper()}'
+
+    @staticmethod
+    def scan_files(files, path_name='adt_files.txt'):
+        scan_info = {
+            "path": path_name,
+            "create": int(time.time()),
+            "valid_files": {},
+            "ignore_files": [],
+            "invalid_files": [],
+            "exts": {},
+            "media_series":{},
+            "missed_vols": [],
+        }
+        for file in files:
+            filename = os.path.basename(file)
+            if filename.startswith('.') or filename.startswith('_'):
+                scan_info['ignore_files'].append(file)
+                continue
+            ext = os.path.splitext(filename)[1][1:].lower()
+            name = os.path.splitext(filename)[0]
+            if ext not in LocalVols._valid_exts:
+                scan_info['ignore_files'].append(file)
+                continue
+            match = LocalVols._final_pattern.match(name)
+            if match:
+                pats = re.findall(LocalVols._parse_pattern, name)
+                if len(pats) == 1: # single match
+                    series, number, section = LocalVols.try_parse_media_name(pats[0])
+                    media_name = LocalVols.make_media_name(series, number)
+                    scan_info['media_series'][series] = scan_info['media_series'].get(series, 0) + 1
+                    media_info = scan_info['valid_files'].get(media_name, [])
+                    media_info.append(file)
+                    scan_info['valid_files'][media_name] = media_info
+                    scan_info['exts'][ext] = scan_info['exts'].get(ext, 0) + 1
+                    if not MovieSeries.is_vol_exists(media_name):
+                        scan_info['missed_vols'].append(media_name)
+                    continue
+            
+            scan_info['invalid_files'].append(file)
+
+        scan_info['missed_vols'] = list(set(scan_info['missed_vols']))
+        with open('scan_info.json', 'w') as f:
+            json.dump(scan_info, f, indent=2, ensure_ascii=False)
+            f.write('\n')
+        return scan_info
+
+    @staticmethod
+    def print_location_summary(location_info):
+        print(f'Location info of path: {location_info["path"]}')
+        print(f' - valid_files: {len(location_info["valid_files"].keys())}')
+        print(f' - ignore_files: {len(location_info["ignore_files"])}')
+        print(f' - invalid_files: {len(location_info["invalid_files"])}')
+        print(f' - exts: {len(location_info["exts"].keys())}')
+        print(f' - media_series: {len(location_info["media_series"].keys())}')
+        print(f' - missed_vols: {len(location_info["missed_vols"])}')
+
+    @staticmethod
+    def handle_missed_vols(scan_info):
+        logging.info(f'[+] Handling missed vols: {len(scan_info["missed_vols"])}')
+        succ_cnt = 0
+        cnt = 0
+        total = len(scan_info['missed_vols'])
+        for vol in scan_info['missed_vols']:
+            cnt = cnt + 1
+            logging.info(f'[-] Searching [{cnt}/{total}]: {vol}')
+            movie_summary = SearchParser.search_movie_by_vol(vol)
+            if movie_summary:
+                succ_cnt = succ_cnt + 1
+                logging.debug(movie_summary)
+                MovieSeries.save_movie_summary(movie_summary)
+            else:
+                logging.warning(f'Failed to search movie by vol: {vol}')
+        print(f'[=] Search vol got [{succ_cnt} / {len(scan_info["missed_vols"])}]!')
+
 # fetch & save actor's summary & movies
 # get_new_only=True, fetch new movies only
 def update_actor_urls(urls=[], get_new_only=True):
@@ -1159,8 +1275,7 @@ def add_movie_urls(urls=[], new_movie_only=True):
         todo_urls = []
         for url in urls:
             movie_id = UrlParser.parse_movie_id(url)
-            movie = MovieHelper.load_movie(movie_id)
-            if not movie:
+            if not MovieHelper.is_movie_exists(movie_id):
                 todo_urls.append(url)
     logging.info(f'Got {len(todo_urls)} movie urls TODO:')
     failed_urls = update_movie_urls(todo_urls, get_new_only=False)
@@ -1212,7 +1327,7 @@ def do_update_movie_detail_from_summary(movie, url_root=None, progress_str='', m
     return movie_detail
 
 # fetch detail of movies of actors in db
-def update_actor_movies_indb(db_dir=ActorHelper.DEFAULT_ACTOR_DB_DIR, movie_db_dir=MovieHelper.DEFAULT_MOVIE_DB_DIR, ignore_exists=True):
+def update_movies_indb(db_dir=ActorHelper.DEFAULT_ACTOR_DB_DIR, movie_db_dir=MovieHelper.DEFAULT_MOVIE_DB_DIR, ignore_exists=True):
     logging.info(f'Updating actor movies in db: {db_dir}')
     actors = ActorHelper.load_actors(db_dir)
     cnt_actor = 0
@@ -1226,8 +1341,8 @@ def update_actor_movies_indb(db_dir=ActorHelper.DEFAULT_ACTOR_DB_DIR, movie_db_d
         total_movie = len(actor['movies'])
         for movie_id in actor['movies']:
             cnt_movie = cnt_movie + 1
-            movie = MovieHelper.load_movie(movie_id, movie_db=movie_db_dir)
-            if movie and ignore_exists:
+            # movie = MovieHelper.load_movie(movie_id, movie_db=movie_db_dir)
+            if ignore_exists and MovieHelper.is_movie_exists(movie_id):
                 continue
             movie = actor['movies'][movie_id]
             url_root = UrlParser.parse_url_root(actor['url'])
@@ -1240,8 +1355,8 @@ def update_actor_movies_indb(db_dir=ActorHelper.DEFAULT_ACTOR_DB_DIR, movie_db_d
     for vol in movie_vols:
         cnt_movie = cnt_movie + 1
         movie_summary = MovieSeries.load_movie_summary(vol)
-        movie = MovieHelper.load_movie(movie_summary['id'])
-        if movie and ignore_exists:
+        # movie = MovieHelper.load_movie(movie_summary['id'])
+        if ignore_exists and MovieHelper.is_movie_exists(movie_summary['id']):
             continue
         do_update_movie_detail_from_summary(movie_summary, progress_str=f'Movie [{cnt_movie}/{total_movie}]', movie_db_dir=movie_db_dir)
 
@@ -1394,11 +1509,11 @@ def download_movie_previews(movie_db=MovieHelper.DEFAULT_MOVIE_DB_DIR, target_di
 def sync_indb():
     # update_actor_urls(pull_ranks(), get_new_only=True)
     update_actors_indb()
-    todo_urls = update_actor_movies_indb()
+    todo_urls = update_movies_indb()
     while len(todo_urls) > 0:
         logging.info(f'Todo urls: {len(todo_urls)}')
         add_actor_urls(todo_urls)
-        todo_urls = update_actor_movies_indb()
+        todo_urls = update_movies_indb()
     download_covers()
     # download_movie_previews() # too large, not necessary
 
@@ -1439,9 +1554,12 @@ def test():
     # update_actors_indb()
     # MovieDetailHelper.pull_movie_page('https://javdb.com/v/meN5wM')
     # MovieDetailHelper.pull_movie_page('https://javdb.com/v/Az3vBq')
-    # update_actor_movies_indb()
-    movie = SearchParser.search_movie_by_vol('SSIS-999')
-    print(movie)
+    # update_movies_indb()
+    # movie = SearchParser.search_movie_by_vol('SSIS-999')
+    # print(movie)
+    scan_info = LocalVols.scan_files(LocalVols.load_files())
+    LocalVols.print_location_summary(scan_info)
+    LocalVols.handle_missed_vols(scan_info)
     pass
     # cnt = 0
     # while True:
@@ -1488,7 +1606,7 @@ if __name__ == '__main__':
             update_actors_indb()
         elif arg.startswith('movies'): # update actors(in db)' movie info, pull detail from movie page 
             print(f'[=] Start updating movies')
-            update_actor_movies_indb()
+            update_movies_indb()
         elif arg.startswith('sync'): # sync actors and movies indb, download covers
             print(f'[=] Start syncing db')
             sync_indb()
